@@ -65,19 +65,23 @@ namespace WebSocketServer.Middleware
 
         private async Task RouteJSONMessageAsync(string message)
         {
-
             var routeOb = JsonConvert.DeserializeObject<dynamic>(message);
+            string to = routeOb.To.ToString();
+            string msg = routeOb.Message.ToString();
+            bool isPublic = (bool)routeOb.IsPublic;
+
             Console.WriteLine("To: " + routeOb.To);
+            Console.WriteLine("IsPublic: " + routeOb.IsPublic);
             Guid guidOutput;
 
-            if (Guid.TryParse(routeOb.To.ToString(), out guidOutput))
+            if (Guid.TryParse(to, out guidOutput) && !isPublic)
             {
                 Console.WriteLine("Targeted");
-                var sock = _manager.GetAllSockets().FirstOrDefault(s => s.Key == routeOb.To.ToString());
+                var sock = _manager.GetAllSockets().FirstOrDefault(s => s.Key == to);
                 if (sock.Value != null)
                 {
                     if (sock.Value.State == WebSocketState.Open)
-                        await sock.Value.SendAsync(Encoding.UTF8.GetBytes(routeOb.Message.ToString()), WebSocketMessageType.Text, true, CancellationToken.None);
+                        await sock.Value.SendAsync(Encoding.UTF8.GetBytes(msg), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
                 else
                 {
@@ -86,11 +90,23 @@ namespace WebSocketServer.Middleware
             }
             else
             {
-                Console.WriteLine("Broadcast");
-                foreach (var sock in _manager.GetAllSockets())
+                if (Guid.TryParse(to, out guidOutput) && isPublic)
                 {
-                    if (sock.Value.State == WebSocketState.Open)
-                        await sock.Value.SendAsync(Encoding.UTF8.GetBytes(routeOb.Message.ToString()), WebSocketMessageType.Text, true, CancellationToken.None);
+                    Console.WriteLine("Broadcast + To");
+                    foreach (var sock in _manager.GetAllSockets())
+                    {
+                        if (sock.Value.State == WebSocketState.Open)
+                            await sock.Value.SendAsync(Encoding.UTF8.GetBytes(to + ": " + msg), WebSocketMessageType.Text, true, CancellationToken.None);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Broadcast");
+                    foreach (var sock in _manager.GetAllSockets())
+                    {
+                        if (sock.Value.State == WebSocketState.Open)
+                            await sock.Value.SendAsync(Encoding.UTF8.GetBytes(msg), WebSocketMessageType.Text, true, CancellationToken.None);
+                    }
                 }
             }
 
